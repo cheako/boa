@@ -2,18 +2,14 @@
 
 use crate::{
     builtins::{
-        array::array_iterator::ArrayIterator,
-        function::{Function, NativeFunction},
-        map::map_iterator::MapIterator,
-        map::ordered_map::OrderedMap,
-        regexp::regexp_string_iterator::RegExpStringIterator,
-        set::ordered_set::OrderedSet,
-        set::set_iterator::SetIterator,
-        string::string_iterator::StringIterator,
-        Date, RegExp,
+        array::array_iterator::ArrayIterator, map::map_iterator::MapIterator,
+        map::ordered_map::OrderedMap, regexp::regexp_string_iterator::RegExpStringIterator,
+        set::ordered_set::OrderedSet, set::set_iterator::SetIterator,
+        string::string_iterator::StringIterator, Date, RegExp,
     },
     context::StandardConstructor,
     gc::{Finalize, Trace},
+    object::function::{Function, NativeFunctionSignature},
     property::{Attribute, PropertyDescriptor, PropertyKey},
     BoaProfiler, Context, JsBigInt, JsResult, JsString, JsSymbol, JsValue,
 };
@@ -26,6 +22,7 @@ use std::{
 #[cfg(test)]
 mod tests;
 
+pub mod function;
 mod gcobject;
 pub(crate) mod internal_methods;
 mod operations;
@@ -1092,11 +1089,11 @@ pub struct FunctionBuilder<'context> {
 impl<'context> FunctionBuilder<'context> {
     /// Create a new `FunctionBuilder` for creating a native function.
     #[inline]
-    pub fn native(context: &'context mut Context, function: NativeFunction) -> Self {
+    pub fn native(context: &'context mut Context, function: NativeFunctionSignature) -> Self {
         Self {
             context,
             function: Some(Function::Native {
-                function: function.into(),
+                function,
                 constructable: false,
             }),
             name: JsString::default(),
@@ -1245,7 +1242,12 @@ impl<'context> ObjectInitializer<'context> {
 
     /// Add a function to the object.
     #[inline]
-    pub fn function<B>(&mut self, function: NativeFunction, binding: B, length: usize) -> &mut Self
+    pub fn function<B>(
+        &mut self,
+        function: NativeFunctionSignature,
+        binding: B,
+        length: usize,
+    ) -> &mut Self
     where
         B: Into<FunctionBinding>,
     {
@@ -1293,7 +1295,7 @@ impl<'context> ObjectInitializer<'context> {
 /// Builder for creating constructors objects, like `Array`.
 pub struct ConstructorBuilder<'context> {
     context: &'context mut Context,
-    constructor_function: NativeFunction,
+    constructor_function: NativeFunctionSignature,
     constructor_object: JsObject,
     prototype: JsObject,
     name: JsString,
@@ -1320,7 +1322,7 @@ impl Debug for ConstructorBuilder<'_> {
 impl<'context> ConstructorBuilder<'context> {
     /// Create a new `ConstructorBuilder`.
     #[inline]
-    pub fn new(context: &'context mut Context, constructor: NativeFunction) -> Self {
+    pub fn new(context: &'context mut Context, constructor: NativeFunctionSignature) -> Self {
         Self {
             context,
             constructor_function: constructor,
@@ -1337,7 +1339,7 @@ impl<'context> ConstructorBuilder<'context> {
     #[inline]
     pub(crate) fn with_standard_object(
         context: &'context mut Context,
-        constructor: NativeFunction,
+        constructor: NativeFunctionSignature,
         object: StandardConstructor,
     ) -> Self {
         Self {
@@ -1355,7 +1357,12 @@ impl<'context> ConstructorBuilder<'context> {
 
     /// Add new method to the constructors prototype.
     #[inline]
-    pub fn method<B>(&mut self, function: NativeFunction, binding: B, length: usize) -> &mut Self
+    pub fn method<B>(
+        &mut self,
+        function: NativeFunctionSignature,
+        binding: B,
+        length: usize,
+    ) -> &mut Self
     where
         B: Into<FunctionBinding>,
     {
@@ -1381,7 +1388,7 @@ impl<'context> ConstructorBuilder<'context> {
     #[inline]
     pub fn static_method<B>(
         &mut self,
-        function: NativeFunction,
+        function: NativeFunctionSignature,
         binding: B,
         length: usize,
     ) -> &mut Self
@@ -1563,7 +1570,7 @@ impl<'context> ConstructorBuilder<'context> {
     pub fn build(&mut self) -> JsObject {
         // Create the native function
         let function = Function::Native {
-            function: self.constructor_function.into(),
+            function: self.constructor_function,
             constructable: self.constructable,
         };
 

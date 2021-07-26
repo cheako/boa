@@ -13,11 +13,10 @@
 //! [spec]: https://tc39.es/ecma262/#sec-number-object
 //! [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number
 
-use super::function::make_builtin_fn;
 use super::string::is_trimmable_whitespace;
 use crate::{
     builtins::BuiltIn,
-    object::{ConstructorBuilder, ObjectData, PROTOTYPE},
+    object::{function::make_builtin_fn, ConstructorBuilder, ObjectData, PROTOTYPE},
     property::Attribute,
     value::{AbstractRelation, IntegerOrInfinity, JsValue},
     BoaProfiler, Context, JsResult,

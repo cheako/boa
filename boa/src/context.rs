@@ -1,14 +1,13 @@
 //! Javascript context.
 
 use crate::{
-    builtins::{
-        self,
-        function::{Function, FunctionFlags, NativeFunction},
-        iterable::IteratorPrototypes,
-    },
+    builtins::{self, iterable::IteratorPrototypes},
     class::{Class, ClassBuilder},
     exec::Interpreter,
-    object::{FunctionBuilder, JsObject, Object, PROTOTYPE},
+    object::{
+        function::{Function, NativeFunctionSignature, ThisMode},
+        FunctionBuilder, JsObject, Object, PROTOTYPE,
+    },
     property::{Attribute, PropertyDescriptor, PropertyKey},
     realm::Realm,
     syntax::{
@@ -271,8 +270,8 @@ pub struct Context {
     /// Cached standard objects and their prototypes.
     standard_objects: StandardObjects,
 
-    /// Whether or not to show trace of instructions being ran
-    pub trace: bool,
+    #[cfg(feature = "vm")]
+    pub(crate) vm: Vm,
 }
 
 impl Default for Context {
@@ -286,7 +285,13 @@ impl Default for Context {
             console: Console::default(),
             iterator_prototypes: IteratorPrototypes::default(),
             standard_objects: Default::default(),
-            trace: false,
+            #[cfg(feature = "vm")]
+            vm: Vm {
+                frame: None,
+                stack: Vec::with_capacity(1024),
+                trace: false,
+                stack_size_limit: 1024,
+            },
         };
 
         // Add new builtIns to Context Realm
@@ -524,7 +529,8 @@ impl Context {
         name: N,
         params: P,
         body: B,
-        flags: FunctionFlags,
+        constructable: bool,
+        this_mode: ThisMode,
     ) -> JsResult<JsValue>
     where
         N: Into<JsString>,
@@ -541,7 +547,8 @@ impl Context {
         let params = params.into();
         let params_len = params.len();
         let func = Function::Ordinary {
-            flags,
+            constructable,
+            this_mode,
             body: RcStatementList::from(body.into()),
             params,
             environment: self.get_current_environment().clone(),
@@ -601,7 +608,7 @@ impl Context {
         &mut self,
         name: &str,
         length: usize,
-        body: NativeFunction,
+        body: NativeFunctionSignature,
     ) -> JsResult<()> {
         let function = FunctionBuilder::native(self, body)
             .name(name)
@@ -816,6 +823,10 @@ impl Context {
     #[cfg(feature = "vm")]
     #[allow(clippy::unit_arg, clippy::drop_copy)]
     pub fn eval<T: AsRef<[u8]>>(&mut self, src: T) -> JsResult<JsValue> {
+        use gc::Gc;
+
+        use crate::vm::CallFrame;
+
         let main_timer = BoaProfiler::global().start_event("Main", "Main");
         let src_bytes: &[u8] = src.as_ref();
 
@@ -828,11 +839,24 @@ impl Context {
             Err(e) => return self.throw_syntax_error(e),
         };
 
-        let mut compiler = crate::bytecompiler::ByteCompiler::default();
+        let mut compiler = crate::bytecompiler::ByteCompiler::new(JsString::new("<main>"), false);
         compiler.compile_statement_list(&statement_list, true);
         let code_block = compiler.finish();
-        let mut vm = Vm::new(code_block, self);
-        let result = vm.run();
+
+        let environment = self.get_current_environment().clone();
+        let fp = self.vm.stack.len();
+        let global_object = self.global_object().into();
+
+        self.vm.push_frame(CallFrame {
+            prev: None,
+            code: Gc::new(code_block),
+            this: global_object,
+            pc: 0,
+            fp,
+            exit_on_return: true,
+            environment,
+        });
+        let result = self.run();
 
         // The main_timer needs to be dropped before the BoaProfiler is.
         drop(main_timer);
@@ -854,7 +878,8 @@ impl Context {
     }
 
     /// Set the value of trace on the context
+    #[cfg(feature = "vm")]
     pub fn set_trace(&mut self, trace: bool) {
-        self.trace = trace;
+        self.vm.trace = trace;
     }
 }
