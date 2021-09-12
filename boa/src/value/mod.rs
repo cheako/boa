@@ -109,7 +109,7 @@ impl JsValue {
         Self::Rational(f64::NEG_INFINITY)
     }
 
-    /// Returns a new empty object
+    /// Returns a new empty object with the `%Object.prototype%` prototype.
     pub(crate) fn new_object(context: &Context) -> Self {
         let _timer = BoaProfiler::global().start_event("new_object", "value");
         context.construct_object().into()
@@ -454,17 +454,28 @@ impl JsValue {
     ) -> JsResult<JsValue> {
         // 1. Assert: input is an ECMAScript language value. (always a value not need to check)
         // 2. If Type(input) is Object, then
-        if let JsValue::Object(obj) = self {
-            if let Some(exotic_to_prim) =
-                obj.get_method(context, WellKnownSymbols::to_primitive())?
-            {
+        if self.is_object() {
+            // a. Let exoticToPrim be ? GetMethod(input, @@toPrimitive).
+            let exotic_to_prim = self.get_method(context, WellKnownSymbols::to_primitive())?;
+
+            // b. If exoticToPrim is not undefined, then
+            if !exotic_to_prim.is_undefined() {
+                // i. If preferredType is not present, let hint be "default".
+                // ii. Else if preferredType is string, let hint be "string".
+                // iii. Else,
+                //     1. Assert: preferredType is number.
+                //     2. Let hint be "number".
                 let hint = match preferred_type {
+                    PreferredType::Default => "default",
                     PreferredType::String => "string",
                     PreferredType::Number => "number",
-                    PreferredType::Default => "default",
                 }
                 .into();
-                let result = exotic_to_prim.call(self, &[hint], context)?;
+
+                // iv. Let result be ? Call(exoticToPrim, input, « hint »).
+                let result = context.call(&exotic_to_prim, self, &[hint])?;
+                // v. If Type(result) is not Object, return result.
+                // vi. Throw a TypeError exception.
                 return if result.is_object() {
                     Err(context.construct_type_error("Symbol.toPrimitive cannot return an object"))
                 } else {
@@ -472,14 +483,16 @@ impl JsValue {
                 };
             }
 
-            let mut hint = preferred_type;
-
-            if hint == PreferredType::Default {
-                hint = PreferredType::Number;
+            // c. If preferredType is not present, let preferredType be number.
+            let preferred_type = match preferred_type {
+                PreferredType::Default | PreferredType::Number => PreferredType::Number,
+                PreferredType::String => PreferredType::String,
             };
 
-            // g. Return ? OrdinaryToPrimitive(input, hint).
-            obj.ordinary_to_primitive(context, hint)
+            // d. Return ? OrdinaryToPrimitive(input, preferredType).
+            self.as_object()
+                .expect("self was not an object")
+                .ordinary_to_primitive(context, preferred_type)
         } else {
             // 3. Return input.
             Ok(self.clone())
@@ -893,6 +906,90 @@ impl JsValue {
             //     c. Return ? IsArray(target).
             // 4. Return false.
             Ok(object.is_array())
+        } else {
+            Ok(false)
+        }
+    }
+
+    /// Retrieves value of specific property, when the value of the property is expected to be a function.
+    ///
+    /// More information:
+    /// - [EcmaScript reference][spec]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-getmethod
+    pub(crate) fn get_method<K>(&self, context: &mut Context, key: K) -> JsResult<JsValue>
+    where
+        K: Into<PropertyKey>,
+    {
+        // 1. Assert: IsPropertyKey(P) is true.
+        // 2. Let func be ? GetV(V, P).
+        let func = self.get_v(context, key)?;
+
+        // 3. If func is either undefined or null, return undefined.
+        if func.is_null_or_undefined() {
+            return Ok(JsValue::undefined());
+        }
+
+        // 4. If IsCallable(func) is false, throw a TypeError exception.
+        if !func.is_callable() {
+            Err(context
+                .construct_type_error("value returned for property of object is not a function"))
+        } else {
+            // 5. Return func.
+            Ok(func)
+        }
+    }
+
+    /// The `GetV ( V, P )` abstract operation
+    ///
+    /// Retrieves the value of a specific property of an ECMAScript language value. If the value is
+    /// not an object, the property lookup is performed using a wrapper object appropriate for the
+    /// type of the value.
+    ///
+    /// More information:
+    /// - [EcmaScript reference][spec]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-getmethod
+    #[inline]
+    pub(crate) fn get_v<K>(&self, context: &mut Context, key: K) -> JsResult<JsValue>
+    where
+        K: Into<PropertyKey>,
+    {
+        // 1. Let O be ? ToObject(V).
+        let o = self.to_object(context)?;
+
+        // 2. Return ? O.[[Get]](P, V).
+        o.get(key, context)
+    }
+
+    /// It determines if the value is a callable function with a `[[Call]]` internal method.
+    ///
+    /// More information:
+    /// - [EcmaScript reference][spec]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-iscallable
+    #[track_caller]
+    pub(crate) fn is_callable(&self) -> bool {
+        if let Self::Object(obj) = self {
+            obj.is_callable()
+        } else {
+            false
+        }
+    }
+
+    /// Determines if `value` inherits from the instance object inheritance path.
+    ///
+    /// More information:
+    /// - [EcmaScript reference][spec]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-ordinaryhasinstance
+    pub(crate) fn ordinary_has_instance(
+        &self,
+        context: &mut Context,
+        value: &JsValue,
+    ) -> JsResult<bool> {
+        if let Self::Object(obj) = self {
+            obj.ordinary_has_instance(context, value)
         } else {
             Ok(false)
         }

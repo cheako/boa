@@ -93,6 +93,8 @@ pub struct StandardObjects {
     uri_error: StandardConstructor,
     map: StandardConstructor,
     set: StandardConstructor,
+    typed_array: StandardConstructor,
+    array_buffer: StandardConstructor,
 }
 
 impl Default for StandardObjects {
@@ -116,6 +118,8 @@ impl Default for StandardObjects {
             uri_error: StandardConstructor::default(),
             map: StandardConstructor::default(),
             set: StandardConstructor::default(),
+            typed_array: StandardConstructor::default(),
+            array_buffer: StandardConstructor::default(),
         }
     }
 }
@@ -209,6 +213,16 @@ impl StandardObjects {
     #[inline]
     pub fn set_object(&self) -> &StandardConstructor {
         &self.set
+    }
+
+    #[inline]
+    pub fn typed_array_object(&self) -> &StandardConstructor {
+        &self.typed_array
+    }
+
+    #[inline]
+    pub fn array_buffer_object(&self) -> &StandardConstructor {
+        &self.array_buffer
     }
 }
 
@@ -373,7 +387,7 @@ impl Context {
         builtins::init(self);
     }
 
-    /// Construct an empty object.
+    /// Constructs an object with the `%Object.prototype%` prototype.
     #[inline]
     pub fn construct_object(&self) -> JsObject {
         let object_prototype: JsValue = self.standard_objects().object_object().prototype().into();

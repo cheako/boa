@@ -10,6 +10,7 @@ use crate::{
         set::ordered_set::OrderedSet,
         set::set_iterator::SetIterator,
         string::string_iterator::StringIterator,
+        typed_array::IntegerIndexedObject,
         Date, RegExp,
     },
     context::StandardConstructor,
@@ -26,14 +27,14 @@ use std::{
 #[cfg(test)]
 mod tests;
 
-mod gcobject;
 pub(crate) mod internal_methods;
+mod jsobject;
 mod operations;
 mod property_map;
 
 use crate::builtins::object::for_in_iterator::ForInIterator;
-pub use gcobject::{JsObject, RecursionLimiter, Ref, RefMut};
 use internal_methods::InternalObjectMethods;
+pub use jsobject::{JsObject, RecursionLimiter, Ref, RefMut};
 pub use operations::IntegrityLevel;
 pub use property_map::*;
 
@@ -92,6 +93,7 @@ pub struct ObjectData {
 pub enum ObjectKind {
     Array,
     ArrayIterator(ArrayIterator),
+    ArrayBuffer,
     Map(OrderedMap<JsValue>),
     MapIterator(MapIterator),
     RegExp(Box<RegExp>),
@@ -111,6 +113,7 @@ pub enum ObjectKind {
     Date(Date),
     Global,
     NativeObject(Box<dyn NativeObject>),
+    TypedArray(IntegerIndexedObject),
 }
 
 impl ObjectData {
@@ -281,37 +284,43 @@ impl ObjectData {
             internal_methods: &ORDINARY_INTERNAL_METHODS,
         }
     }
+
+    /// Creates the `TypedArray` object data
+    pub fn typed_array(integer_indexed_object: IntegerIndexedObject) -> Self {
+        Self {
+            kind: ObjectKind::TypedArray(integer_indexed_object),
+            internal_methods: &ORDINARY_INTERNAL_METHODS,
+        }
+    }
 }
 
 impl Display for ObjectKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Self::Array => "Array",
-                Self::ArrayIterator(_) => "ArrayIterator",
-                Self::ForInIterator(_) => "ForInIterator",
-                Self::Function(_) => "Function",
-                Self::RegExp(_) => "RegExp",
-                Self::RegExpStringIterator(_) => "RegExpStringIterator",
-                Self::Map(_) => "Map",
-                Self::MapIterator(_) => "MapIterator",
-                Self::Set(_) => "Set",
-                Self::SetIterator(_) => "SetIterator",
-                Self::String(_) => "String",
-                Self::StringIterator(_) => "StringIterator",
-                Self::Symbol(_) => "Symbol",
-                Self::Error => "Error",
-                Self::Ordinary => "Ordinary",
-                Self::Boolean(_) => "Boolean",
-                Self::Number(_) => "Number",
-                Self::BigInt(_) => "BigInt",
-                Self::Date(_) => "Date",
-                Self::Global => "Global",
-                Self::NativeObject(_) => "NativeObject",
-            }
-        )
+        f.write_str(match self {
+            Self::Array => "Array",
+            Self::ArrayIterator(_) => "ArrayIterator",
+            Self::ArrayBuffer => "ArrayBuffer",
+            Self::ForInIterator(_) => "ForInIterator",
+            Self::Function(_) => "Function",
+            Self::RegExp(_) => "RegExp",
+            Self::RegExpStringIterator(_) => "RegExpStringIterator",
+            Self::Map(_) => "Map",
+            Self::MapIterator(_) => "MapIterator",
+            Self::Set(_) => "Set",
+            Self::SetIterator(_) => "SetIterator",
+            Self::String(_) => "String",
+            Self::StringIterator(_) => "StringIterator",
+            Self::Symbol(_) => "Symbol",
+            Self::Error => "Error",
+            Self::Ordinary => "Ordinary",
+            Self::Boolean(_) => "Boolean",
+            Self::Number(_) => "Number",
+            Self::BigInt(_) => "BigInt",
+            Self::Date(_) => "Date",
+            Self::Global => "Global",
+            Self::NativeObject(_) => "NativeObject",
+            Self::TypedArray(_) => "TypedArray",
+        })
     }
 }
 
@@ -356,13 +365,12 @@ impl Object {
         }
     }
 
-    /// ObjectCreate is used to specify the runtime creation of new ordinary objects.
+    /// `OrdinaryObjectCreate` is used to specify the runtime creation of new ordinary objects.
     ///
     /// More information:
     ///  - [ECMAScript reference][spec]
     ///
-    /// [spec]: https://tc39.es/ecma262/#sec-objectcreate
-    // TODO: proto should be a &Value here
+    /// [spec]: https://tc39.es/ecma262/#sec-ordinaryobjectcreate
     #[inline]
     pub fn create(proto: JsValue) -> Self {
         let mut obj = Self::new();
@@ -512,6 +520,18 @@ impl Object {
             } => Some(iter),
             _ => None,
         }
+    }
+
+    /// Checks if it an `ArrayBuffer` object.
+    #[inline]
+    pub fn is_array_buffer(&self) -> bool {
+        matches!(
+            self.data,
+            ObjectData {
+                kind: ObjectKind::ArrayBuffer,
+                ..
+            }
+        )
     }
 
     #[inline]
@@ -852,6 +872,7 @@ impl Object {
         )
     }
 
+    #[inline]
     pub fn as_date(&self) -> Option<&Date> {
         match self.data {
             ObjectData {
@@ -874,6 +895,7 @@ impl Object {
         )
     }
 
+    /// Gets the regexp data if the object is a regexp.
     #[inline]
     pub fn as_regexp(&self) -> Option<&RegExp> {
         match self.data {
@@ -881,6 +903,42 @@ impl Object {
                 kind: ObjectKind::RegExp(ref regexp),
                 ..
             } => Some(regexp),
+            _ => None,
+        }
+    }
+
+    /// Checks if it a `TypedArray` object.
+    #[inline]
+    pub fn is_typed_array(&self) -> bool {
+        matches!(
+            self.data,
+            ObjectData {
+                kind: ObjectKind::TypedArray(_),
+                ..
+            }
+        )
+    }
+
+    /// Gets the typed array data (integer indexed object) if this is a typed array.
+    #[inline]
+    pub fn as_typed_array(&self) -> Option<&IntegerIndexedObject> {
+        match self.data {
+            ObjectData {
+                kind: ObjectKind::TypedArray(ref integer_indexed_object),
+                ..
+            } => Some(integer_indexed_object),
+            _ => None,
+        }
+    }
+
+    /// Gets the typed array data (integer indexed object) if this is a typed array.
+    #[inline]
+    pub fn as_mut_typed_array(&mut self) -> Option<&mut IntegerIndexedObject> {
+        match self.data {
+            ObjectData {
+                kind: ObjectKind::TypedArray(ref mut integer_indexed_object),
+                ..
+            } => Some(integer_indexed_object),
             _ => None,
         }
     }
@@ -897,6 +955,7 @@ impl Object {
         )
     }
 
+    /// Gets the prototype instance of this object.
     #[inline]
     pub fn prototype_instance(&self) -> &JsValue {
         &self.prototype

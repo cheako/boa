@@ -486,7 +486,7 @@ impl JsObject {
         self.borrow_mut().set_prototype_instance(prototype)
     }
 
-    /// Checks if it an `Array` object.
+    /// Checks if it's an `Array` object.
     ///
     /// # Panics
     ///
@@ -508,6 +508,17 @@ impl JsObject {
         self.borrow().is_array_iterator()
     }
 
+    /// Checks if it's an `ArrayBuffer` object.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the object is currently mutably borrowed.
+    #[inline]
+    #[track_caller]
+    pub fn is_array_buffer(&self) -> bool {
+        self.borrow().is_array_buffer()
+    }
+
     /// Checks if it is a `Map` object.pub
     ///
     /// # Panics
@@ -519,7 +530,7 @@ impl JsObject {
         self.borrow().is_map()
     }
 
-    /// Checks if it a `String` object.
+    /// Checks if it's a `String` object.
     ///
     /// # Panics
     ///
@@ -530,7 +541,7 @@ impl JsObject {
         self.borrow().is_string()
     }
 
-    /// Checks if it a `Function` object.
+    /// Checks if it's a `Function` object.
     ///
     /// # Panics
     ///
@@ -541,7 +552,7 @@ impl JsObject {
         self.borrow().is_function()
     }
 
-    /// Checks if it a Symbol object.
+    /// Checks if it's a `Symbol` object.
     ///
     /// # Panics
     ///
@@ -552,7 +563,7 @@ impl JsObject {
         self.borrow().is_symbol()
     }
 
-    /// Checks if it an Error object.
+    /// Checks if it's an `Error` object.
     ///
     /// # Panics
     ///
@@ -563,7 +574,7 @@ impl JsObject {
         self.borrow().is_error()
     }
 
-    /// Checks if it a Boolean object.
+    /// Checks if it's a `Boolean` object.
     ///
     /// # Panics
     ///
@@ -574,7 +585,7 @@ impl JsObject {
         self.borrow().is_boolean()
     }
 
-    /// Checks if it a `Number` object.
+    /// Checks if it's a `Number` object.
     ///
     /// # Panics
     ///
@@ -585,7 +596,7 @@ impl JsObject {
         self.borrow().is_number()
     }
 
-    /// Checks if it a `BigInt` object.
+    /// Checks if it's a `BigInt` object.
     ///
     /// # Panics
     ///
@@ -596,7 +607,7 @@ impl JsObject {
         self.borrow().is_bigint()
     }
 
-    /// Checks if it a `RegExp` object.
+    /// Checks if it's a `RegExp` object.
     ///
     /// # Panics
     ///
@@ -607,7 +618,18 @@ impl JsObject {
         self.borrow().is_regexp()
     }
 
-    /// Checks if it an ordinary object.
+    /// Checks if it's a `TypedArray` object.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the object is currently mutably borrowed.
+    #[inline]
+    #[track_caller]
+    pub fn is_typed_array(&self) -> bool {
+        self.borrow().is_typed_array()
+    }
+
+    /// Checks if it's an ordinary object.
     ///
     /// # Panics
     ///

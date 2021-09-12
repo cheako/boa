@@ -4,6 +4,7 @@
 #![allow(clippy::unnecessary_wraps)]
 
 pub mod array;
+pub mod array_buffer;
 pub mod bigint;
 pub mod boolean;
 #[cfg(feature = "console")]
@@ -25,6 +26,7 @@ pub mod regexp;
 pub mod set;
 pub mod string;
 pub mod symbol;
+pub mod typed_array;
 pub mod undefined;
 
 pub(crate) use self::{
@@ -50,6 +52,10 @@ pub(crate) use self::{
     set::Set,
     string::String,
     symbol::Symbol,
+    typed_array::{
+        BigInt64Array, BigUint64Array, Float32Array, Float64Array, Int16Array, Int32Array,
+        Int8Array, Uint16Array, Uint32Array, Uint8Array, Uint8ClampedArray,
+    },
     undefined::Undefined,
 };
 use crate::{
@@ -87,6 +93,17 @@ pub fn init(context: &mut Context) {
         Set::init,
         String::init,
         RegExp::init,
+        Int8Array::init,
+        Uint8Array::init,
+        Uint8ClampedArray::init,
+        Int16Array::init,
+        Uint16Array::init,
+        Int32Array::init,
+        Uint32Array::init,
+        BigInt64Array::init,
+        BigUint64Array::init,
+        Float32Array::init,
+        Float64Array::init,
         Symbol::init,
         Error::init,
         RangeError::init,

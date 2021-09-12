@@ -983,7 +983,7 @@ impl RegExp {
         let named_groups = match_value.named_groups();
         let groups = if named_groups.clone().count() > 0 {
             // a. Let groups be ! OrdinaryObjectCreate(null).
-            let groups = JsValue::new_object(context);
+            let groups = JsValue::from(JsObject::new(Object::create(JsValue::null())));
 
             // Perform 27.f here
             // f. If the ith capture of R was defined with a GroupName, then

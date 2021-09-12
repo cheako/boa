@@ -211,35 +211,6 @@ impl JsObject {
         Ok(success)
     }
 
-    /// Retrieves value of specific property, when the value of the property is expected to be a function.
-    ///
-    /// More information:
-    /// - [EcmaScript reference][spec]
-    ///
-    /// [spec]: https://tc39.es/ecma262/#sec-getmethod
-    #[inline]
-    pub(crate) fn get_method<K>(&self, context: &mut Context, key: K) -> JsResult<Option<JsObject>>
-    where
-        K: Into<PropertyKey>,
-    {
-        // 1. Assert: IsPropertyKey(P) is true.
-        // 2. Let func be ? GetV(V, P).
-        let value = self.get(key, context)?;
-
-        // 3. If func is either undefined or null, return undefined.
-        if value.is_null_or_undefined() {
-            return Ok(None);
-        }
-
-        // 4. If IsCallable(func) is false, throw a TypeError exception.
-        // 5. Return func.
-        match value.as_object() {
-            Some(object) if object.is_callable() => Ok(Some(object)),
-            _ => Err(context
-                .construct_type_error("value returned for property of object is not a function")),
-        }
-    }
-
     /// Check if object has property.
     ///
     /// More information:
